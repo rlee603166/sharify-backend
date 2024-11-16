@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from typing import Dict
 from schemas import ExampleResponses, ReceiptRequest, ReceiptResponse
 from dependencies import ReceiptProcessorDep
 
