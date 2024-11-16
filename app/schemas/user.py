@@ -1,74 +1,41 @@
-from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
-import re
 
-class UserBase(BaseModel):
-    email: EmailStr
-    username: str = Field(..., min_length=3)
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-
-    @field_validator('username')
-    @classmethod
-    def username_alphanumeric(cls, v):
-        if not re.match('^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Username must be alphanumeric')
-        return v
-
-class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
-    
-    @field_validator('password')
-    @classmethod
-    def password_strength(cls, v):
-        if not re.search(r'[A-Z]', v):
-            raise ValueError('Password must contain an uppercase letter')
-        if not re.search(r'[a-z]', v):
-            raise ValueError('Password must contain a lowercase letter')
-        if not re.search(r'\d', v):
-            raise ValueError('Password must contain a number')
-        return v
-
-class UserInDB(UserBase):
-    id: str
-    hashed_password: str
-    created_at: datetime
-    updated_at: datetime
-    disabled: bool = False
-
-    class Config:
-        orm_mode = True
-
-class UserResponse(UserBase):
-    id: str
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        orm_mode = True
+from pydantic import BaseModel
 
 class Token(BaseModel):
     access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-                "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-                "token_type": "bearer",
-                "expires_in": 3600
-            }
-        }
+    token_type: str
+    
 
 class TokenData(BaseModel):
-    user_id: str
-    device_id: Optional[str] = None
-    exp: datetime
+    username: str | None = None
+    
 
-class RefreshToken(BaseModel):
-    refresh_token: str
-    device_id: Optional[str] = None
+class UserBase(BaseModel):
+    username: str
+    hashed_password: str
+    email: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+class User(UserBase):
+    pass
+
+
+class UserInDB(UserBase):
+    hashed_password: str
+    
+    
+class UserCreate(UserBase):
+    email: str
+    first_name: str
+    last_name: str
+    phone_number: str
+    zip: int
+    
+    
+# Look later no fully dev
+class UserUpdate(UserBase):
+    username: str | None = None
+    phone_number: str | None = None
+    zip: int | None = None

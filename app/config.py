@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     SECRET_KEY: str = os.getenv("SECRET_KEY")
-    
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ALGORITHM: str = os.getenv("ALGORITHM")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
     
     ALLOWED_ORIGINS: List[str] = [
         "capacitor://localhost",
