@@ -3,12 +3,10 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from passlib.context import CryptContext
-
-from schemas import UserInDB, User, UserCreate
+from schemas import UserInDB, User, UserCreate, TokenData
 from repositories import UserRepository
-from config import get_settings
+from config import settings
 
-settings = get_settings()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -64,7 +62,18 @@ class AuthService:
                 status_code=401,
                 detail="Authentication failed"
             )
-
+            
+            
+    async def verify_token(self, token: str) -> Optional[UserInDB]:
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            username: str = payload.get("sub")
+            if username is None:
+                return None
+            token_data = TokenData(username=username)
+            return await self.repository.get_by_username(token_data.username)
+        except jwt.InvalidTokenError:
+            return None
     
     async def create_user(self, user_data: UserCreate):
         try:
