@@ -1,13 +1,11 @@
 from typing import Optional, List
 from fastapi import HTTPException
-from services import AuthService
-from repositories import UserRepository
 from schemas import UserInDB, UserCreate
 
 class UserService:
-    def __init__(self):
-        self.repository = UserRepository()
-        self.auth_service = AuthService()
+    def __init__(self, repository, auth):
+        self.repository = repository
+        self.auth_service = auth
         
     async def get_all_users(self) -> List[UserInDB]:
         return await self.repository.get_all()
@@ -21,8 +19,25 @@ class UserService:
             raise
 
     async def create_user(self, user: UserCreate) -> UserInDB:
-        # Add any business logic here (e.g., password validation)
-        hashed_password = self.auth_service.get_password_hash(user.hashed_password)
-        user_db = UserCreate(**user, hashed_password=hashed_password)
+        existing_user = await self.repository.get_by_phone(user.phone_number)
+        
+        if existing_user:
+            raise HTTPException(
+                status_code=409,  # Conflict status code
+                detail=f"User with phone number {user.phone_number} already exists"
+            )
+            
+        hashed_password = self.auth_service.get_password_hash(user.password)
+        
+        user_db = UserInDB(
+            username=user.username,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            phone_number=user.phone_number,
+            zip=user.zip,
+            hashed_password=hashed_password
+        )
+        
         return await self.repository.create(user_db)
 

@@ -3,11 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from schemas import Token, UserCreate
-from services import AuthService
+from dependencies import AuthServiceDep
 from config import get_settings
 
 settings = get_settings()
-auth_service = AuthService()
 
 router = APIRouter(
     prefix="/auth",
@@ -16,7 +15,8 @@ router = APIRouter(
 
 @router.post("/token")
 async def login(
-    form_data: Annotated[OAuth2PasswordRequestForm,Depends()]
+    form_data: Annotated[OAuth2PasswordRequestForm,Depends()],
+    auth_service: AuthServiceDep
 ) -> Token:
     user = await auth_service.authenticate_user(form_data.username, form_data.password)
     if not user:
@@ -34,5 +34,8 @@ async def login(
 
 
 @router.post("/register")
-async def register(user_create: UserCreate):
+async def register(
+    user_create: UserCreate,
+    auth_service: AuthServiceDep
+):
     return await auth_service.create_user(user_create)

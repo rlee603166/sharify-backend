@@ -4,15 +4,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from passlib.context import CryptContext
 from schemas import UserInDB, User, UserCreate, TokenData
-from repositories import UserRepository
 from config import settings
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class AuthService:
-    def __init__(self):
-        self.repository = UserRepository()
+    def __init__(self, repository):
+        self.repository = repository
     
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
@@ -102,3 +101,7 @@ class AuthService:
                 status_code=500,
                 detail=f"Error creating user: {str(e)}"
             )
+
+class TwilioService(AuthService):
+    def __init__(self):
+        super.__init__()

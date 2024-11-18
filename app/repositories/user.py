@@ -47,10 +47,12 @@ class UserRepository(BaseRepository[dict, UserCreate, UserUpdate]):
             response = (
                 self.db.table(self.table_name)
                     .select("*")
-                    .eq("phone", phone)
-                    .single()
+                    .eq("phone_number", phone)
                     .execute()
             )
-            return response.data[0]
+
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None  
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))

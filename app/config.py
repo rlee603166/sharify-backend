@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
     
-    TWILIO_ASID: str = os.getenv["TWILIO_ACCOUNT_SID"]
-    TWILIO_AUTH_TOKEN: str = os.getenv["TWILIO_AUTH_TOKEN"]
+    TWILIO_ASID: str = os.getenv("TWILIO_ACCOUNT_SID")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN")
     
     ENVIRONMENT: str = os.getenv("ENVIRONMENT")
     

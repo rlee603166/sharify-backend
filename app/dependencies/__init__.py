@@ -1,2 +1,1 @@
-from .auth import *
-from .receipt import *
+from .dependencies import *
