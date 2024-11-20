@@ -12,13 +12,13 @@ client = Client(
 )
 
 
-# verification = client.verify.v2.services(
-#     "VA36043d17f0c4c1630d225be4056ae495"
-# ).verifications.create(to="+13108745772", channel="sms")
-
-
-verification_check = client.verify.v2.services(
+verification = client.verify.v2.services(
     "VA36043d17f0c4c1630d225be4056ae495"
-).verification_checks.create(to="+13108745772", code="834697")
+).verifications.create(to="+13108745772", channel="sms")
+
+
+# verification_check = client.verify.v2.services(
+#     "VA36043d17f0c4c1630d225be4056ae495"
+# ).verification_checks.create(to="+13108745772", code="834697")
 
 print(verification_check.status)

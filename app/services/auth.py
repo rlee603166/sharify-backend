@@ -1,4 +1,5 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+import httpx
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -103,5 +104,40 @@ class AuthService:
             )
 
 class TwilioService(AuthService):
-    def __init__(self):
-        super.__init__()
+    def __init__(self, repo, account_sid: str, auth_token: str, service_id: str, http_client: httpx.AsyncClient):
+        super().__init__(repo)
+        self.auth = (account_sid, auth_token)  # This is correct
+        self.service_id = service_id
+        self.http_client = http_client  # This should be httpx.AsyncClient, not Request
+        
+    async def send_sms(self, user: User) -> str:
+        try:
+            response = await self.http_client.post(
+                f"https://verify.twilio.com/v2/Services/{self.service_id}/Verifications",
+                auth=self.auth,
+                data={
+                    "To": f"+1{user['phone_number']}",
+                    "Channel": "sms"
+                }
+            )
+            response.raise_for_status()  # This will raise an exception for bad status codes
+            result = response.json()
+            return result["status"]
+        except httpx.HTTPError as e:
+            # Log the error details
+            print(f"Twilio API error: {str(e)}")
+            print(f"Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
+            raise
+
+
+    async def verify_sms(self, user: User, code: str) -> str:
+        response = await self.http_client.post(  # Use http_client not async_client
+            f"https://verify.twilio.com/v2/Services/{self.service_id}/VerificationCheck",
+            auth=self.auth,  # Use self.auth, not self.client.username/password
+            data={
+                "To": f"+1{user['phone_number']}",  # Assuming user is a Pydantic model
+                "Code": code
+            }
+        )
+        result = response.json()
+        return result["status"]

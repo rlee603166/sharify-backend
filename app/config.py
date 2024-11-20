@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     
     TWILIO_ASID: str = os.getenv("TWILIO_ACCOUNT_SID")
     TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN")
+    TWILIO_SERVICE_ID: str = os.getenv("TWILIO_SERVICE_ID")
     
     ENVIRONMENT: str = os.getenv("ENVIRONMENT")
     
