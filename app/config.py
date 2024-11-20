@@ -1,19 +1,16 @@
 from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
-from typing import List, Optional
+from typing import List
 from functools import lru_cache
-import os
-
-load_dotenv()
 
 class Settings(BaseSettings):
     API_V1_STR: str = '/api/v1'
     PROJECT_NAME: str = 'Cover'
     DEBUG: bool = True
     
-    SECRET_KEY: str = os.getenv("SECRET_KEY")
-    ALGORITHM: str = os.getenv("ALGORITHM")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    PORT: int = 8000  # Added PORT with default value
     
     ALLOWED_ORIGINS: List[str] = [
         "capacitor://localhost",
@@ -22,24 +19,23 @@ class Settings(BaseSettings):
         "http://0.0.0.0"
     ]
     
+    DATABASE_URL: str
+    SUPABASE_KEY: str
     
-    DATABASE_URL: str = os.getenv("DATABASE_URL")
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY")
+    # Fixed field name to match environment variable
+    TWILIO_ASID: str
+    TWILIO_AUTH_TOKEN: str
+    TWILIO_SERVICE_ID: str
     
-    TWILIO_ASID: str = os.getenv("TWILIO_ACCOUNT_SID")
-    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN")
-    TWILIO_SERVICE_ID: str = os.getenv("TWILIO_SERVICE_ID")
+    ENVIRONMENT: str
     
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT")
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True
+    }
 
 settings = Settings()
 
-# Use the existing instance
 @lru_cache()
 def get_settings() -> Settings:
-    return settings 
+    return settings
