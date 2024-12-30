@@ -4,9 +4,8 @@ from twilio.rest import Client as TwilioClient
 from supabase import create_client, Client as SupabaseClient
 from functools import lru_cache
 from fastapi import Depends, Request
-from services import ReceiptProcessor
 from repositories import UserRepository
-from services import AuthService, UserService, TwilioService
+from services import AuthService, UserService, TwilioService, MockTwilioService, ReceiptProcessor, MockAuthService
 from config import Settings, get_settings
 
 settings = get_settings()
@@ -91,3 +90,15 @@ def get_twilio_service(
     
 TwilioServiceDep = Annotated[TwilioService, Depends(get_twilio_service)]
 
+
+async def get_mock_auth_service() -> MockAuthService:
+    return MockAuthService()
+
+MockAuthServiceDep = Annotated[MockAuthService, Depends(get_mock_auth_service)]
+
+
+async def get_mock_service() -> MockTwilioService:
+    return MockTwilioService()
+
+
+MockTwilioServiceDep = Annotated[MockTwilioService, Depends(get_mock_service)]

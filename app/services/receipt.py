@@ -1,109 +1,100 @@
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict
-from fastapi import HTTPException
-from schemas import ReceiptRequest, SplitMethod
+import re
+import json
+from openai import OpenAI
+from dotenv import load_dotenv
+import pytesseract
+import cv2
+
+load_dotenv()
 
 class ReceiptProcessor:
-    def __init__(self):
-        self.decimal_places = 2
+    def __init__(self) -> None:
+        self.client = OpenAI()
 
-    def round_decimal(self, amount: float) -> float:
-        """Round amount to specified decimal places."""
-        return float(Decimal(str(amount)).quantize(
-            Decimal(f'0.{"0" * self.decimal_places}'),
-            rounding=ROUND_HALF_UP
-        ))
+    def ocr(self, image_path):
+        try:
+        # Read the image
+            image = cv2.imread(image_path)
+            if image is None:
+                raise FileNotFoundError(f"Image not found at path: {image_path}")
 
-    def calculate_charges_percentage(self, subtotal: float, charges: Dict[str, float]) -> float:
-        """Calculate the percentage of additional charges relative to subtotal."""
-        total_charges = sum(charges.values())
-        return total_charges / subtotal if subtotal > 0 else 0
+        # Convert the image to RGB format
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    def process_equal_split(self, receipt: ReceiptRequest) -> Dict:
-        """Process receipt for equal splitting among party."""
-        subtotal = sum(item.quantity * item.price for item in receipt.items)
-        total_charges = sum(receipt.additional_charges.values())
-        total_paid = subtotal + total_charges
+        # Perform OCR
+            text = pytesseract.image_to_string(image)
+            return text
+        except Exception as e:
+            return f"Error processing the image: {str(e)}"
 
-        party_size = receipt.party_size or 1
-        per_person_base = self.round_decimal(subtotal / party_size)
-        per_person_charges = {
-            charge_name: self.round_decimal(amount / party_size)
-            for charge_name, amount in receipt.additional_charges.items()
-        }
-        per_person_total = self.round_decimal(total_paid / party_size)
-
-        return {
-            "split_method": SplitMethod.EQUAL,
-            "subtotal": self.round_decimal(subtotal),
-            "charges": {
-                name: self.round_decimal(amount)
-                for name, amount in receipt.additional_charges.items()
-            },
-            "total_paid": self.round_decimal(total_paid),
-            "per_person": {
-                "base_amount": per_person_base,
-                "charges": per_person_charges,
-                "total": per_person_total
-            }
-        }
-
-    def process_itemized_split(self, receipt: ReceiptRequest) -> Dict:
-        """Process receipt for itemized splitting based on assigned items."""
-        person_totals = {person: {"items": [], "subtotal": 0} for person in receipt.assigned_parties}
-        
-        # Process each line item
-        subtotal = 0
-        for item in receipt.items:
-            item_total = item.quantity * item.price
-            subtotal += item_total
-            
-            assigned_people = item.assigned_to or receipt.assigned_parties
-            per_person_amount = self.round_decimal(item_total / len(assigned_people))
-            
-            for person in assigned_people:
-                if person not in person_totals:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Assigned person {person} not in party list"
+    async def get_completion(self, prompt, model="gpt-4"):
+        try:
+            completion = self.client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                        ]
                     )
-                person_totals[person]["subtotal"] += per_person_amount
-                person_totals[person]["items"].append({
-                    "name": item.name,
-                    "quantity": item.quantity,
-                    "price": item.price,
-                    "share": per_person_amount
-                })
+            return completion.choices[0].message.content
+        except Exception as e:
+            return f"An error occurred: {str(e)}"
 
-        # Calculate additional charges proportion for each person
-        total_charges = sum(receipt.additional_charges.values())
-        
-        # Add proportional charges to each person's total
-        for person in person_totals:
-            person_subtotal = person_totals[person]["subtotal"]
-            person_charges = {
-                charge_name: self.round_decimal(amount * (person_subtotal / subtotal))
-                for charge_name, amount in receipt.additional_charges.items()
-            }
-            person_totals[person]["charges"] = person_charges
-            person_totals[person]["total"] = self.round_decimal(
-                person_subtotal + sum(person_charges.values())
+
+    async def process_receipt(self, image_path):
+        """
+        Process a receipt image and extract structured data.
+
+        Args:
+            image_path (str): Path to the receipt image file.
+
+        Returns:
+            dict: Parsed transaction data or an error message.
+        """
+        try:
+            # Step 1: Extract text using OCR
+            extracted_text = self.ocr(image_path)
+            
+            # Step 2: Send prompt to GPT model
+            completion = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",  # Replace with the appropriate model
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an assistant that formats receipt data into a structured format for a food-sharing app."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""
+                        The following is text extracted from a receipt. Extract the items and prices and format them as an array of objects with this structure:
+
+                        items: [
+                            {{
+                                id: "<unique_id>",
+                                name: "<item_name>",
+                                price: <price>,
+                                people: []
+                            }},
+                            ...
+                        ]
+
+                        Use an incrementing numeric ID for each item, starting from 1. Ensure the names and prices are accurate.
+
+                        Text:
+                        {extracted_text}
+                        """
+                    }
+                ],
+                max_tokens=500
             )
 
-        return {
-            "split_method": SplitMethod.ITEMIZED,
-            "subtotal": self.round_decimal(subtotal),
-            "charges": {
-                name: self.round_decimal(amount)
-                for name, amount in receipt.additional_charges.items()
-            },
-            "total_paid": self.round_decimal(subtotal + total_charges),
-            "person_totals": person_totals
-        }
+            raw_response = completion.choices[0].message.content
 
-    def process_receipt(self, receipt: ReceiptRequest) -> Dict:
-        """Process receipt based on specified split method."""
-        if receipt.split_method == SplitMethod.EQUAL:
-            return self.process_equal_split(receipt)
-        else:
-            return self.process_itemized_split(receipt)
+            return raw_response
+
+        except FileNotFoundError:
+            return {"error": f"Image file not found: {image_path}"}
+        except json.JSONDecodeError as e:
+            return {"error": f"Failed to parse JSON response: {str(e)}", "raw_response": raw_response}
+        except Exception as e:
+            return {"error": f"Processing failed: {str(e)}"}

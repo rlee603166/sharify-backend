@@ -1,47 +1,48 @@
+import json
+import re
 from fastapi import APIRouter, HTTPException
-from schemas import ExampleResponses, ReceiptRequest, ReceiptResponse
+from pydantic import BaseModel
 from dependencies import ReceiptProcessorDep
 
+class Prompt(BaseModel):
+    prompt: str
 
 router = APIRouter(
     prefix="/receipts",
     tags=["receipts"]
 )
 
+
 @router.post(
     "/process",
-    response_model=ReceiptResponse
 )
-async def process_receipt(receipt: ReceiptRequest, processor: ReceiptProcessorDep):
+async def process_receipt(
+    request: Prompt,
+    service: ReceiptProcessorDep
+):
     """
     Process a receipt and calculate splits based on the specified method.
     
     - Equal split divides all costs evenly among the party
     - Itemized split allows assigning specific items to specific people
     """
-    try:
-        result = processor.process_receipt(receipt)
-        return result
+    try:    
+        result = await service.process_receipt(request.prompt)
+        clean_response = re.sub(r'```(?:json|javascript)?\n?(.*?)\n?```', r'\1', result, flags=re.DOTALL)
+        
+        # Try to fix common JSON formatting issues
+        clean_response = clean_response.strip()
+        if not clean_response.startswith('{'):
+            clean_response = '{' + clean_response + '}'
+        
+        # Convert any remaining JavaScript-style object to valid JSON
+        clean_response = re.sub(r'(?m)^(\s*)(\w+):', r'\1"\2":', clean_response)
+        
+        # Parse the cleaned response
+        parsed_data = json.loads(clean_response)
+
+        return parsed_data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Add documentation examples
-process_receipt.responses = {
-    200: {
-        "description": "Successful receipt processing",
-        "content": {
-            "application/json": {
-                "examples": {
-                    "equal_split": {
-                        "summary": "Equal Split Example",
-                        "value": ExampleResponses.equal_split_example
-                    },
-                    "itemized_split": {
-                        "summary": "Itemized Split Example",
-                        "value": ExampleResponses.itemized_split_example
-                    }
-                }
-            }
-        }
-    }
-}
+

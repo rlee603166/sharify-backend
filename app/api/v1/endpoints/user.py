@@ -1,115 +1,118 @@
-from datetime import datetime, timedelta, timezone
-from typing import Annotated, List
+from fastapi import APIRouter, HTTPException
+from schemas import Venmo, UserCreate, RegisterToken, AuthForm, RegisterForm
+from dependencies import AuthServiceDep, TwilioServiceDep
+import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from passlib.context import CryptContext
-
-from api.v1.endpoints.auth import token
-from dependencies import AuthServiceDep, UserServiceDep, TwilioServiceDep
-from schemas import User, UserCreate
 
 router = APIRouter(
     prefix="/users",
     tags=["users"]
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-router = APIRouter(prefix="/users", tags=["users"])
-
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    auth_service: AuthServiceDep
-) -> User:
-    user = await auth_service.verify_token(token)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
+@router.post("/registerSMS")
+async def sms(
+        auth_form: AuthForm,
+        auth_service: AuthServiceDep,
+        twilio_service: TwilioServiceDep
+):
+        
+    verification_status = await twilio_service.verify_sms(auth_form.phone_number, auth_form.code)
+    if verification_status == 'approved':
+        register_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        register_token = auth_service.create_access_token(
+            data={
+                'phone_number': form.phone_number,
+                'status': 'verified',
+                'temp_token': True
+            },
+            expires_delta=register_token_expires
         )
-    return user
 
-async def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> User:
-    return current_user
+        return RegisterToken(
+            status='success',
+            register_token=register_token,
+            token_type='bearer'
+        )
+ 
 
-@router.get("/me", response_model=User)
-async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_active_user)]
-) -> User:
-    return current_user
+@router.post("/register")
+async def register(
+    register_form: RegisterForm, 
+    user_create: UserCreate,
+    auth_service: AuthServiceDep
+): 
+    username = register_form.username
+    phone_number = register_form.phone_number
+    register_token = register_form.register_token
 
-@router.get("/", response_model=List[User])
-async def read_users(
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    user_service: UserServiceDep
-):
-    return await user_service.get_all_users()
-
-
-@router.get("/login")
-async def login(
-    user: Annotated[User, Depends(get_current_active_user)],
-    twilio_service: TwilioServiceDep
-):
-    try:
-        verification = await twilio_service.send_sms(user)
+    verified = auth_service.verify_register_token(register_token, phone_number)
+    if not verified:
         return {
-            "status": "verification_sent",
-            "message": f"Verification code sent to phone",
-            "verification_status": verification  # Optionally include the Twilio status
+            "status": "error"
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send verification: {str(e)}"
+    user_create = UserCreate(
+        username=username,  
+        phone=phone_number
+    )
+    created_user = await auth_service.create_user(user_create)
+
+    # Finish auth process by providing access and refresh tokens
+
+
+@router.get('/venmo/{username}')
+async def get_venmo(username: str):
+    chrome_options = Options()
+    chrome_options.add_argument('--headless')
+    driver = webdriver.Chrome(options=chrome_options)
+    
+    try:
+        driver.get(f"https://account.venmo.com/u/{username}")
+        
+        avatar_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR, 
+                ".MuiAvatar-root"
+            ))
         )
         
-@router.post("/verify-phone")  # or whatever your route path is
-async def verify_phone(
-    user: Annotated[User, Depends(get_current_active_user)],
-    code: str,  # You might want to use a Pydantic model for this
-    twilio_service: TwilioServiceDep,
-    auth_service: AuthServiceDep,
-    form_data: OAuth2PasswordRequestForm = Depends()
-):
-    try:
-        verification_status = await twilio_service.verify_sms(user, code)
-        if verification_status == 'approved':
-            new_token = await token(form_data, auth_service)
-            return {
-                "status": "success",
-                "is_verified": True,
-                "message": "Phone verified successfully",
-                "access_token": new_token.access_token,
-                "token_type": new_token.token_type
-            }
-        # Always return a dictionary
+        username_element = driver.find_element(By.CLASS_NAME, "profileInfo_username__G9vVA")
+        handle_element = driver.find_element(By.CLASS_NAME, "profileInfo_handle__adidN")
+        
+        handle = handle_element.text.replace('@', '')
+        
+        initials = None
+        profile_image = None
+        
+        try:
+            img_element = avatar_element.find_element(By.CLASS_NAME, "MuiAvatar-img")
+            profile_image = img_element.get_attribute("src")
+        except NoSuchElementException:
+            initials = avatar_element.text
+            
         return {
-            "status": verification_status,
-            "message": "Phone verification completed"
+            "username": username_element.text,
+            "handle": handle,
+            "profile_image": profile_image,
+            "initials": initials
         }
-    except Exception as e:
-        print(f"Verification error: {str(e)}")  # Debug logging
+            
+    except TimeoutException:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to verify code: {str(e)}"
+            status_code=404,
+            detail="Profile not found or page took too long to load"
         )
-
-@router.post("/register", response_model=User)
-async def create_user(
-    user: UserCreate,
-    user_service: UserServiceDep
-):
-    return await user_service.create_user(user)
-
-@router.get("/test")
-async def test(
-    user_service: UserServiceDep
-):
-    return await user_service.get_user('ryan')
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching profile: {str(e)}"
+        )
+        
+    finally:
+        driver.quit()

@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     SECRET_KEY: str
+    REFRESH_SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
-    PORT: int = 8000  # Added PORT with default value
+    REFRESH_TOKEN_EXPIRE_DAYS: int
+    PORT: int = 8000
     
     ALLOWED_ORIGINS: List[str] = [
         "capacitor://localhost",
@@ -21,11 +23,11 @@ class Settings(BaseSettings):
     
     DATABASE_URL: str
     SUPABASE_KEY: str
-    
-    # Fixed field name to match environment variable
     TWILIO_ASID: str
     TWILIO_AUTH_TOKEN: str
     TWILIO_SERVICE_ID: str
+
+    OPENAI_API_KEY: str
     
     ENVIRONMENT: str
     
