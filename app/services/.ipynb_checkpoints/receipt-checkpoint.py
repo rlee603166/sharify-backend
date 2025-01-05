@@ -1,7 +1,6 @@
 import re
 import json
 from openai import OpenAI
-import numpy as np
 from dotenv import load_dotenv
 import pytesseract
 import cv2
@@ -11,72 +10,6 @@ load_dotenv()
 class ReceiptProcessor:
     def __init__(self) -> None:
         self.client = OpenAI()
-
-
-    def resize(self, image):
-        height = 1080
-        aspect = image.shape[1] / image.shape[0]
-        width = int(height * aspect)
-
-        return cv2.resize(image, (width, height), interpolation=cv2.INTER_CUBIC)
-
-    
-    def enhance(self, image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        enhanced = clahe.apply(gray)
-    
-        dilated = cv2.dilate(enhanced, np.ones((7,7), np.uint8))
-        bg = cv2.medianBlur(dilated, 21)
-        diff = 255 - cv2.absdiff(enhanced, bg)
-    
-        normalized = cv2.normalize(diff, None, alpha=0, beta=255, 
-                                    norm_type=cv2.NORM_MINMAX)
-        return normalized
-
-
-    def threshold(self, image):
-        blur = cv2.GaussianBlur(image, (5,5), 0)
-        _, binary = cv2.threshold(blur, 0, 255, 
-                            cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
-        kernel = np.ones((2,2), np.uint8)
-        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-        return binary
-
-
-    def deskew(self, image):
-        coords = np.column_stack(np.where(image > 0))
-
-        angle = cv2.minAreaRect(coords)[-1]
-
-        if angle < -45:
-            angle = 90 + angle
-
-        (h, w) = image.shape[:2]
-        center = (w // 2, h // 2)
-        M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        rotated = cv2.warpAffine(image, M, (w, h),
-                                 flags=cv2.INTER_CUBIC,
-                                 borderMode=cv2.BORDER_REPLICATE)
-        return rotated
-
-
-    def preprocess(self, image):
-        resized = self.resize(image)
-        
-        enhanced = self.enhance(resized)
-    
-        binary = self.threshold(enhanced)
-    
-        deskewed = self.deskew(binary)
-    
-        kernel = np.ones((2,2), np.uint8)
-        cleaned = cv2.morphologyEx(deskewed, cv2.MORPH_CLOSE, kernel)
-    
-        return cleaned
-
 
     def ocr(self, image_path):
         try:
@@ -93,7 +26,6 @@ class ReceiptProcessor:
             return text
         except Exception as e:
             return f"Error processing the image: {str(e)}"
-
 
     async def get_completion(self, prompt, model="gpt-4"):
         try:

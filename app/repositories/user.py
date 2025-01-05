@@ -5,7 +5,6 @@ from database import supabase
 
 class UserRepository(BaseRepository[dict, UserCreate, UserUpdate]):
     def __init__(self):
-        # Specify user_id as primary key
         super().__init__(supabase, "users", pk="user_id")
         
     async def get_by_email(self, email: str):

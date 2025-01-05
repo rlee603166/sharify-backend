@@ -4,7 +4,7 @@ from twilio.rest import Client as TwilioClient
 from supabase import create_client, Client as SupabaseClient
 from functools import lru_cache
 from fastapi import Depends, Request
-from repositories import UserRepository
+from repositories import UserRepository, ReceiptRepository
 from services import AuthService, UserService, TwilioService, MockTwilioService, ReceiptProcessor, MockAuthService
 from config import Settings, get_settings
 
@@ -22,12 +22,17 @@ ReceiptProcessorDep = Annotated[ReceiptProcessor, Depends(get_receipt_processor)
 
 
 """
-User Services
+Servies and Dependencies
 """
 
 @lru_cache()
 def get_user_repository() -> UserRepository:
     return UserRepository()
+
+@lru_cache()
+def get_receipt_repository() -> ReceiptRepository:
+    return ReceiptRepository()
+
 
 
 @lru_cache()
@@ -45,9 +50,9 @@ def get_user_service(
 
 
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
+ReceiptRepositoryDep = Annotated[ReceiptRepository, Depends(get_receipt_repository)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
-
 
 """
 Third Part Clients

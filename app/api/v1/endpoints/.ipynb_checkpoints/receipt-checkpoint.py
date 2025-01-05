@@ -2,8 +2,7 @@ import json
 import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from dependencies import ReceiptProcessorDep, ReceiptRepositoryDep 
-from schemas import ReceiptCreate
+from dependencies import ReceiptProcessorDep
 
 class Prompt(BaseModel):
     prompt: str
@@ -12,13 +11,6 @@ router = APIRouter(
     prefix="/receipts",
     tags=["receipts"]
 )
-
-
-@router.post("/")
-async def create_receipt(receipt: ReceiptCreate, repo: ReceiptRepositoryDep):
-    receipt_dict = receipt.model_dump()
-
-    return await repo.create(ReceiptCreate(**receipt_dict))
 
 
 @router.post(
