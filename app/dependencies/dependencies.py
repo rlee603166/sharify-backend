@@ -10,17 +10,6 @@ from config import Settings, get_settings
 
 settings = get_settings()
 
-
-"""
-Receipt Processor
-"""
-@lru_cache()
-def get_receipt_processor() -> ReceiptProcessor:
-    return ReceiptProcessor()
-
-ReceiptProcessorDep = Annotated[ReceiptProcessor, Depends(get_receipt_processor)]
-
-
 """
 Servies and Dependencies
 """
@@ -33,12 +22,9 @@ def get_user_repository() -> UserRepository:
 def get_receipt_repository() -> ReceiptRepository:
     return ReceiptRepository()
 
-
-
 @lru_cache()
 def get_auth_service(repo: Annotated[UserRepository, Depends(get_user_repository)]) -> AuthService:
     return AuthService(repository=repo)
-
 
 @lru_cache()
 def get_user_service(
@@ -47,8 +33,14 @@ def get_user_service(
 ) -> UserService:
     return UserService(repository=repo, auth=auth)
 
+@lru_cache()
+def get_receipt_processor(
+    repo: Annotated[ReceiptRepository, Depends(get_receipt_repository)]
+) -> ReceiptProcessor:
+    return ReceiptProcessor(repository=repo)
 
 
+ReceiptProcessorDep = Annotated[ReceiptProcessor, Depends(get_receipt_processor)]
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
 ReceiptRepositoryDep = Annotated[ReceiptRepository, Depends(get_receipt_repository)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

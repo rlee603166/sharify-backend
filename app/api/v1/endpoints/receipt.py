@@ -1,9 +1,12 @@
 import json
 import re
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import asyncio
+from fastapi import APIRouter, HTTPException, UploadFile, Form, BackgroundTasks
 from dependencies import ReceiptProcessorDep, ReceiptRepositoryDep 
-from schemas import ReceiptCreate
+from pydantic import BaseModel
+from schemas import ReceiptForm
+from typing import Annotated
+
 
 class Prompt(BaseModel):
     prompt: str
@@ -15,42 +18,30 @@ router = APIRouter(
 
 
 @router.post("/")
-async def create_receipt(receipt: ReceiptCreate, repo: ReceiptRepositoryDep):
-    receipt_dict = receipt.model_dump()
-
-    return await repo.create(ReceiptCreate(**receipt_dict))
-
-
-@router.post(
-    "/process",
-)
-async def process_receipt(
-    request: Prompt,
-    service: ReceiptProcessorDep
+async def create_receipt(
+    user_id: Annotated[str, Form()],
+    image: UploadFile,
+    service: ReceiptProcessorDep,
+    background_tasks: BackgroundTasks
 ):
-    """
-    Process a receipt and calculate splits based on the specified method.
+    png = await service.standardize(image)
+
+    filepath = service.create_filepath(user_id)
+
+    receipt_data = {
+        "user_id": user_id,
+        "filepath": filepath,
+        "status": "pending"
+    }
     
-    - Equal split divides all costs evenly among the party
-    - Itemized split allows assigning specific items to specific people
-    """
-    try:    
-        result = await service.process_receipt(request.prompt)
-        clean_response = re.sub(r'```(?:json|javascript)?\n?(.*?)\n?```', r'\1', result, flags=re.DOTALL)
-        
-        # Try to fix common JSON formatting issues
-        clean_response = clean_response.strip()
-        if not clean_response.startswith('{'):
-            clean_response = '{' + clean_response + '}'
-        
-        # Convert any remaining JavaScript-style object to valid JSON
-        clean_response = re.sub(r'(?m)^(\s*)(\w+):', r'\1"\2":', clean_response)
-        
-        # Parse the cleaned response
-        parsed_data = json.loads(clean_response)
+    background_tasks.add_task(service.save_and_process, png, filepath)
 
-        return parsed_data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return await service.upload(receipt_data)
 
+
+@router.get("/{receipt_id}")
+async def get_receipt(receipt_id: int, repo: ReceiptRepositoryDep):
+    print(receipt_id)
+    return await repo.get(receipt_id)
+    
 

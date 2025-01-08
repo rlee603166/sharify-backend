@@ -34,7 +34,6 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 self.db.table(self.table_name)
                     .select("*")
                     .eq(self.pk, id)
-                    .single()
                     .execute()
             )
             return response.data[0]
@@ -62,10 +61,16 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 .eq(self.pk, id)
                 .execute()
             )
+            if not response.data:
+                raise HTTPException(status_code=404, detail="Record not found")
             return response.data[0]
+        except HTTPException as e:
+            raise e
         except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database update failed: {str(e)}"
+            ) from e       
         
     async def delete(self, id: int) -> bool:
         try:

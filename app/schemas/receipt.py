@@ -1,14 +1,22 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Json
+from fastapi import UploadFile
+from typing import Dict, Any
+
+
+class ReceiptForm(BaseModel):
+    user_id: str
+
 
 class ReceiptCreate(BaseModel):
     user_id: str
-    image_url: str
+    filepath: str
     status: str
+
 
 class ReceiptUpdate(BaseModel):
     user_id: str | None = None
-    image_url: str | None = None
+    filepath: str | None = None
     status: str | None = None
-    processed_data: str | None = None
-
+    processed_data: Dict[str, Any] | None = None
+    extracted_text: str | None = None
 

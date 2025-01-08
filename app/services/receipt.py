@@ -1,49 +1,110 @@
 import re
 import json
+import asyncio
+import uuid
+from datetime import datetime
 from openai import OpenAI
+from PIL import Image, ExifTags
 import numpy as np
 from dotenv import load_dotenv
+from schemas import ReceiptCreate, ReceiptUpdate
 import pytesseract
 import cv2
+from io import BytesIO
 
 load_dotenv()
 
 class ReceiptProcessor:
-    def __init__(self) -> None:
+    def __init__(self, repository) -> None:
         self.client = OpenAI()
+        self.repository = repository 
+        self.pwd = "/home/sush/divvy/divvy-backend/storage"
+
+
+    def create_filepath(self, user_id):
+        timestamp = datetime.now().strftime('%Y%m%d')
+        unique_id = str(uuid.uuid4())
+        extension = "png"
+
+        return f"{self.pwd}/{user_id}_{timestamp}_{unique_id}.{extension}"
+
+
+    async def standardize(self, image_data):
+        content = await image_data.read()
+
+        image = Image.open(BytesIO(content))
+     
+        try:
+            for orientation in ExifTags.TAGS.keys():
+                if ExifTags.TAGS[orientation] == 'Orientation':
+                    break
+
+            exif = image._getexif()
+            if exif is not None:
+                if orientation in exif:
+                    if exif[orientation] == 3:
+                        image = image.rotate(180, expand=True)
+                    elif exif[orientation] == 6:
+                        image = image.rotate(270, expand=True)
+                    elif exif[orientation] == 8:
+                        image = image.rotate(90, expand=True)
+
+        except (AttributeError, KeyError, IndexError, TypeError):
+            pass       
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        
+        output_buffer = BytesIO()
+        image.save(output_buffer, format='PNG')
+
+        return output_buffer.getvalue()
+
+
+    async def save_image(self, image_data, filepath):
+        try:
+            img = Image.open(BytesIO(image_data))
+            await asyncio.to_thread(img.save, filepath)
+        except Exception as e:
+            print(f'Error saving image: {e}')
+
+
+    async def upload(self, data):
+        return await self.repository.create(ReceiptCreate(**data))
 
 
     def resize(self, image):
-        height = 1080
-        aspect = image.shape[1] / image.shape[0]
-        width = int(height * aspect)
-
-        return cv2.resize(image, (width, height), interpolation=cv2.INTER_CUBIC)
+        max_dimension = 2000
+        height, width = image.shape[:2]
+        if max(height, width) > max_dimension:
+            scale = max_dimension / max(height, width)
+            width = int(width * scale)
+            height = int(height * scale)
+            return cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
+        return image
 
     
     def enhance(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
         enhanced = clahe.apply(gray)
-    
-        dilated = cv2.dilate(enhanced, np.ones((7,7), np.uint8))
-        bg = cv2.medianBlur(dilated, 21)
-        diff = 255 - cv2.absdiff(enhanced, bg)
-    
-        normalized = cv2.normalize(diff, None, alpha=0, beta=255, 
-                                    norm_type=cv2.NORM_MINMAX)
-        return normalized
+        denoised = cv2.fastNlMeansDenoising(enhanced)
+        return denoised
 
 
     def threshold(self, image):
-        blur = cv2.GaussianBlur(image, (5,5), 0)
-        _, binary = cv2.threshold(blur, 0, 255, 
-                            cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
+        binary = cv2.adaptiveThreshold(
+            image, 
+            255, 
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 
+            21,  # block size
+            11   # C constant
+        )
         kernel = np.ones((2,2), np.uint8)
-        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-        return binary
+        cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    
+        return cleaned
 
 
     def deskew(self, image):
@@ -65,67 +126,47 @@ class ReceiptProcessor:
 
     def preprocess(self, image):
         resized = self.resize(image)
-        
-        enhanced = self.enhance(resized)
-    
-        binary = self.threshold(enhanced)
-    
-        deskewed = self.deskew(binary)
-    
-        kernel = np.ones((2,2), np.uint8)
-        cleaned = cv2.morphologyEx(deskewed, cv2.MORPH_CLOSE, kernel)
-    
-        return cleaned
 
+        enhanced = self.enhance(resized)
+
+        binary = self.threshold(enhanced)
+
+        return binary
 
     def ocr(self, image_path):
         try:
-        # Read the image
             image = cv2.imread(image_path)
             if image is None:
                 raise FileNotFoundError(f"Image not found at path: {image_path}")
 
-        # Convert the image to RGB format
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = self.preprocess(image)
 
-        # Perform OCR
             text = pytesseract.image_to_string(image)
             return text
         except Exception as e:
             return f"Error processing the image: {str(e)}"
 
 
-    async def get_completion(self, prompt, model="gpt-4"):
+    def clean_text(self, text):
+        text = ' '.join(text.split())
+    
+        text = re.sub(r'[=|]', '', text)
+        text = re.sub(r'\s+', ' ', text)
+    
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+        cleaned_text = '\n'.join(lines)
+    
+        return cleaned_text
+
+
+    async def process(self, image_path):
         try:
-            completion = self.client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": "You are a helpful assistant."},
-                        {"role": "user", "content": prompt}
-                        ]
-                    )
-            return completion.choices[0].message.content
-        except Exception as e:
-            return f"An error occurred: {str(e)}"
-
-
-    async def process_receipt(self, image_path):
-        """
-        Process a receipt image and extract structured data.
-
-        Args:
-            image_path (str): Path to the receipt image file.
-
-        Returns:
-            dict: Parsed transaction data or an error message.
-        """
-        try:
-            # Step 1: Extract text using OCR
             extracted_text = self.ocr(image_path)
-            
-            # Step 2: Send prompt to GPT model
+
             completion = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Replace with the appropriate model
+                model="gpt-4o-mini-2024-07-18",
                 messages=[
                     {
                         "role": "system",
@@ -134,31 +175,40 @@ class ReceiptProcessor:
                     {
                         "role": "user",
                         "content": f"""
-                        The following is text extracted from a receipt. Extract the items and prices and format them as an array of objects with this structure:
-
-                        items: [
-                            {{
-                                id: "<unique_id>",
-                                name: "<item_name>",
-                                price: <price>,
-                                people: []
-                            }},
-                            ...
-                        ]
-
+                        The following is text extracted from a receipt. Extract the items and prices and return them as JSON with this exact structure:
+                        {{
+                            "items": [
+                                {{
+                                    "id": "<unique_id>",
+                                    "name": "<item_name>",
+                                    "price": <price>,
+                                    "people": []
+                                }}
+                            ],
+                            "additional": [
+                                {{
+                                    "tax": <tax>,
+                                    "tip": <tip>,
+                                    "credit_charge": <credit_charge>
+                                }}
+                            ]
+                        }}
                         Use an incrementing numeric ID for each item, starting from 1. Ensure the names and prices are accurate.
 
-                        Text:
+                        Receipt text:
                         {extracted_text}
                         """
                     }
                 ],
-                max_tokens=500
+                max_tokens=500,
+                response_format={ "type": "json_object" }
             )
 
             raw_response = completion.choices[0].message.content
 
-            return raw_response
+            response = json.loads(raw_response)
+
+            return response, extracted_text
 
         except FileNotFoundError:
             return {"error": f"Image file not found: {image_path}"}
@@ -166,3 +216,19 @@ class ReceiptProcessor:
             return {"error": f"Failed to parse JSON response: {str(e)}", "raw_response": raw_response}
         except Exception as e:
             return {"error": f"Processing failed: {str(e)}"}
+
+    async def save_and_process(self, png, filepath):
+        await self.save_image(png, filepath)
+
+        (processed_data, extracted_text), receipt = await asyncio.gather(
+            self.process(filepath),
+            self.repository.get_by_path(filepath)
+        )
+
+        update_data = ReceiptUpdate(
+            processed_data=processed_data,
+            extracted_text=extracted_text,
+            status="completed"
+        )
+
+        await self.repository.update(receipt["receipt_id"], update_data)
