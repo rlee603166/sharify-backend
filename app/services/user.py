@@ -1,11 +1,13 @@
 from typing import Optional, List
 from fastapi import HTTPException
 from schemas import UserInDB, UserCreate
+import asyncio
 
 class UserService:
-    def __init__(self, repository, auth):
+    def __init__(self, repository, auth, friend_repo):
         self.repository = repository
         self.auth_service = auth
+        self.friend_repo = friend_repo
         
     async def get_all_users(self) -> List[UserInDB]:
         return await self.repository.get_all()
@@ -40,4 +42,17 @@ class UserService:
         )
         
         return await self.repository.create(user_db)
+
+    async def get_friends(self, user_id: int):
+        friends = await self.friend_repo.get_by_user(user_id)
+        friend_ids =  [
+            friend["user_1"] if friend["user_1"] != user_id else friend["user_2"] 
+            for friend in friends
+        ]
+
+        tasks = [self.repository.get(id) for id in friend_ids]
+
+        usernames = await asyncio.gather(*tasks)
+        
+        return list(zip(friend_ids, usernames)) 
 

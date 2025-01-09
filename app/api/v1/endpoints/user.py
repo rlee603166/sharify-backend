@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from schemas import Venmo, UserCreate, RegisterToken, AuthForm, RegisterForm
-from dependencies import AuthServiceDep, TwilioServiceDep
+from dependencies import AuthServiceDep, FriendRepositoryDep, UserServiceDep, TwilioServiceDep 
 import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -15,13 +15,18 @@ router = APIRouter(
     tags=["users"]
 )
 
+@router.get("/friends/{user_id}")
+async def get_friends(user_id: int, service: UserServiceDep, repo: FriendRepositoryDep):
+    # return await repo.get_by_user(user_id)
+    return await service.get_friends(user_id) 
+
+
 @router.post("/registerSMS")
 async def sms(
-        auth_form: AuthForm,
-        auth_service: AuthServiceDep,
-        twilio_service: TwilioServiceDep
+    auth_form: AuthForm,
+    auth_service: AuthServiceDep,
+    twilio_service: TwilioServiceDep
 ):
-        
     verification_status = await twilio_service.verify_sms(auth_form.phone_number, auth_form.code)
     if verification_status == 'approved':
         register_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -62,7 +67,6 @@ async def register(
     )
     created_user = await auth_service.create_user(user_create)
 
-    # Finish auth process by providing access and refresh tokens
 
 
 @router.get('/venmo/{username}')
