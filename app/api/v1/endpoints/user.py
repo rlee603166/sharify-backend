@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from schemas import Venmo, UserCreate, RegisterToken, AuthForm, RegisterForm
+from schemas import UserCreate, RegisterToken, AuthForm, RegisterForm
 from dependencies import AuthServiceDep, FriendRepositoryDep, UserServiceDep, TwilioServiceDep 
-import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -100,7 +99,7 @@ async def get_venmo(username: str):
             initials = avatar_element.text
             
         return {
-            "username": username_element.text,
+            "name": username_element.text,
             "handle": handle,
             "profile_image": profile_image,
             "initials": initials

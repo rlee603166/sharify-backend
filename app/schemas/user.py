@@ -1,4 +1,5 @@
 from typing import Optional
+from httpx import stream
 from pydantic import BaseModel
 
 class ErrorResponse(BaseModel):
@@ -26,15 +27,7 @@ class UserBase(BaseModel):
 class UserCreate(BaseModel):
     username: str
     phone: str
-
-class User(UserBase):
-    first_name: str 
-    last_name: str 
-
-class UserInDB(User):
-    user_id: int
-    zip: int
-    pin: str
+    imageUri: str | None = None
 
 class UserUpdate(BaseModel):
     username: str | None = None
@@ -66,3 +59,20 @@ class NewUser(BaseModel):
     username: str
     created_at: str
     phone: str
+
+
+class User(BaseModel):
+    user_id: int | None = None
+    name: str | None = None
+    username: str | None = None
+    phone: str | None = None
+    created_at: str | None = None
+    imageUri: str | None = None
+
+class UserInDB(BaseModel):
+    user_id: int | None = None
+    name: str | None = None
+    username: str | None = None
+    phone: str | None = None
+    created_at: str | None = None
+    imageUri: str | None = None

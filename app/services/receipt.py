@@ -1,4 +1,5 @@
 import re
+import os
 import json
 import asyncio
 import uuid
@@ -18,7 +19,12 @@ class ReceiptProcessor:
     def __init__(self, repository) -> None:
         self.client = OpenAI()
         self.repository = repository 
-        self.pwd = "/home/sush/divvy/divvy-backend/storage"
+        self.pwd = os.path.join(
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(__file__))
+            ), 
+            "storage/receipts"
+        )
 
 
     def create_filepath(self, user_id):
@@ -26,7 +32,7 @@ class ReceiptProcessor:
         unique_id = str(uuid.uuid4())
         extension = "png"
 
-        return f"{self.pwd}/{user_id}_{timestamp}_{unique_id}.{extension}"
+        return f"/{user_id}_{timestamp}_{unique_id}.{extension}"
 
 
     async def standardize(self, image_data):
@@ -218,12 +224,18 @@ class ReceiptProcessor:
             return {"error": f"Processing failed: {str(e)}"}
 
     async def save_and_process(self, png, filepath):
-        await self.save_image(png, filepath)
+        print(filepath)
+        print(self.pwd)
+        path = self.pwd + filepath
+        print(path)
+        await self.save_image(png, path)
 
         (processed_data, extracted_text), receipt = await asyncio.gather(
-            self.process(filepath),
+            self.process(path),
             self.repository.get_by_path(filepath)
         )
+
+        print(receipt)
 
         update_data = ReceiptUpdate(
             processed_data=processed_data,

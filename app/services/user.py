@@ -1,13 +1,20 @@
+import os
+import asyncio
 from typing import Optional, List
 from fastapi import HTTPException
 from schemas import UserInDB, UserCreate
-import asyncio
 
 class UserService:
     def __init__(self, repository, auth, friend_repo):
         self.repository = repository
         self.auth_service = auth
         self.friend_repo = friend_repo
+        self.pwd = os.path.join(
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(__file__))
+            ), 
+            "storage/pfp"
+        )
         
     async def get_all_users(self) -> List[UserInDB]:
         return await self.repository.get_all()
@@ -52,7 +59,20 @@ class UserService:
 
         tasks = [self.repository.get(id) for id in friend_ids]
 
-        usernames = await asyncio.gather(*tasks)
+        friends = await asyncio.gather(*tasks)
         
-        return list(zip(friend_ids, usernames)) 
+        result = []
+
+        for friend in friends:
+            result.append(UserInDB(
+                user_id=friend["user_id"],
+                name=friend["name"],
+                username=friend["username"],
+                phone=friend["phone"],
+                created_at=friend["created_at"],
+                imageUri=friend["imageUri"],
+            ))
+
+        return result
+
 

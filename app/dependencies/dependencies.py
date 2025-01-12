@@ -4,14 +4,14 @@ from twilio.rest import Client as TwilioClient
 from supabase import create_client, Client as SupabaseClient
 from functools import lru_cache
 from fastapi import Depends, Request
-from repositories import UserRepository, ReceiptRepository, FriendRepository
+from repositories import UserRepository, ReceiptRepository, FriendRepository, GroupRepository
 from services import AuthService, UserService, TwilioService, MockTwilioService, ReceiptProcessor, MockAuthService
 from config import Settings, get_settings
 
 settings = get_settings()
 
 """
-Servies and Dependencies
+repositories
 """
 
 @lru_cache()
@@ -25,6 +25,14 @@ def get_receipt_repository() -> ReceiptRepository:
 @lru_cache()
 def get_friend_repository() -> FriendRepository:
     return FriendRepository()
+
+@lru_cache()
+def get_group_repository() -> GroupRepository:
+    return GroupRepository()
+
+"""
+services
+"""
 
 @lru_cache()
 def get_auth_service(repo: Annotated[UserRepository, Depends(get_user_repository)]) -> AuthService:
@@ -48,6 +56,7 @@ def get_receipt_processor(
 ReceiptProcessorDep = Annotated[ReceiptProcessor, Depends(get_receipt_processor)]
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
 FriendRepositoryDep = Annotated[FriendRepository, Depends(get_friend_repository)]
+GroupRepositoryDep = Annotated[GroupRepository, Depends(get_group_repository)]
 ReceiptRepositoryDep = Annotated[ReceiptRepository, Depends(get_receipt_repository)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
