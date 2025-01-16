@@ -19,11 +19,12 @@ router = APIRouter(
 
 @router.post("/")
 async def create_receipt(
-    user_id: Annotated[str, Form()],
+    user_id: Annotated[int, Form()],
     image: UploadFile,
     service: ReceiptProcessorDep,
     background_tasks: BackgroundTasks
 ):
+    print(user_id)
     png = await service.standardize(image)
 
     filepath = service.create_filepath(user_id)

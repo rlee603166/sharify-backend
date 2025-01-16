@@ -7,6 +7,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from db_utils import get_user_groups, get_group
 
 
 router = APIRouter(
@@ -119,3 +120,15 @@ async def get_venmo(username: str):
         
     finally:
         driver.quit()
+
+
+@router.get("/groups/{user_id}")
+async def get_groups(user_id: int):
+    groups = await get_user_groups(user_id)
+    return groups.data
+
+
+@router.get("/group/{group_id}")
+async def group(group_id: int):
+    group = await get_group(group_id)
+    return group.data

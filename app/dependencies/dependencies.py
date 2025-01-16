@@ -4,7 +4,7 @@ from twilio.rest import Client as TwilioClient
 from supabase import create_client, Client as SupabaseClient
 from functools import lru_cache
 from fastapi import Depends, Request
-from repositories import UserRepository, ReceiptRepository, FriendRepository, GroupRepository
+from repositories import UserRepository, ReceiptRepository, FriendRepository, GroupRepository, UGRepository
 from services import AuthService, UserService, TwilioService, MockTwilioService, ReceiptProcessor, MockAuthService
 from config import Settings, get_settings
 
@@ -29,6 +29,10 @@ def get_friend_repository() -> FriendRepository:
 @lru_cache()
 def get_group_repository() -> GroupRepository:
     return GroupRepository()
+
+@lru_cache()
+def get_ug_repository() -> UGRepository:
+    return UGRepository()
 
 """
 services
@@ -56,8 +60,9 @@ def get_receipt_processor(
 ReceiptProcessorDep = Annotated[ReceiptProcessor, Depends(get_receipt_processor)]
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
 FriendRepositoryDep = Annotated[FriendRepository, Depends(get_friend_repository)]
-GroupRepositoryDep = Annotated[GroupRepository, Depends(get_group_repository)]
 ReceiptRepositoryDep = Annotated[ReceiptRepository, Depends(get_receipt_repository)]
+GroupRepositoryDep = Annotated[GroupRepository, Depends(get_group_repository)]
+UGRepositoryDep = Annotated[UGRepository, Depends(get_ug_repository)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
@@ -71,21 +76,13 @@ def get_supabase_client() -> SupabaseClient:
         settings.DATABASE_URL,
         settings.SUPABASE_KEY
     )
-
-
-SupabaseClientDep = Annotated[SupabaseClient, Depends(get_supabase_client)]
-
-
+    
 @lru_cache()
 def get_twilio_client() -> TwilioClient:
     return TwilioClient(
         settings.TWILIO_ASID,
         settings.TWILIO_AUTH_TOKEN
     )
-
-
-TwilioClientDep = Annotated[TwilioClient, Depends(get_twilio_client)]
-
 
 def get_twilio_service(
     request: Request,
@@ -100,17 +97,15 @@ def get_twilio_service(
         http_client=request.app.state.http_client
     )
     
-TwilioServiceDep = Annotated[TwilioService, Depends(get_twilio_service)]
-
-
 async def get_mock_auth_service() -> MockAuthService:
     return MockAuthService()
-
-MockAuthServiceDep = Annotated[MockAuthService, Depends(get_mock_auth_service)]
-
 
 async def get_mock_service() -> MockTwilioService:
     return MockTwilioService()
 
 
+TwilioServiceDep = Annotated[TwilioService, Depends(get_twilio_service)]
+TwilioClientDep = Annotated[TwilioClient, Depends(get_twilio_client)]
+SupabaseClientDep = Annotated[SupabaseClient, Depends(get_supabase_client)]
+MockAuthServiceDep = Annotated[MockAuthService, Depends(get_mock_auth_service)]
 MockTwilioServiceDep = Annotated[MockTwilioService, Depends(get_mock_service)]

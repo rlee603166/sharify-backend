@@ -15,13 +15,13 @@ router = APIRouter(
     tags=["auth"]
 )
 
-@router.post("/token", response_model=Token)
+@router.post("/token")
 async def token(
     auth_form: AuthForm,
     auth_service: AuthServiceDep,
     twilio_service: TwilioServiceDep
 ) -> Token:
-    demo = True
+    demo = False
     if demo:
         if auth_form.username == "sush":
             if auth_form.code == "012345":
@@ -39,7 +39,7 @@ async def token(
 
     user = await auth_service.verify_user_credentials(
         auth_form.username,
-        auth_form.phone_number
+        auth_form.phone
     )
     if not user:
         raise HTTPException(
@@ -48,7 +48,7 @@ async def token(
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    verification_status = await twilio_service.verify_sms(auth_form.phone_number, auth_form.code)
+    verification_status = await twilio_service.verify_sms(auth_form.phone, auth_form.code)
     if verification_status == 'approved':
             
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -69,12 +69,13 @@ async def token(
             refresh_token=refresh_token,
             token_type='bearer'
         )
+    else:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
         
-    return ErrorResponse(
-        status="failed",
-        message="invalid crendentials"
-    )
-
+    
 @router.get("/validate-access")
 async def validate_access(
     auth_service: AuthServiceDep,
@@ -131,7 +132,7 @@ async def request(
     mock_service: MockAuthServiceDep
 ):
     try:
-        demo = True
+        demo = False 
         if demo:
             user = await mock_service.get_by_username(
                     form.username
@@ -152,12 +153,13 @@ async def request(
             )
             if not user:
                 return { "status": "failed" }
+
             
-            verification = await twilio_service.send_sms(user['phone_number'])
+            verification = await twilio_service.send_sms(user['phone'])
             if verification in ['pending', 'approved']:
                 return {
                     "status": "verification_sent",
-                    "phone_number": user['phone_number'],
+                    "phone_number": user['phone'],
                     "verification_status": verification
                 }
     except Exception as e:

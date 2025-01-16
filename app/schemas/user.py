@@ -22,7 +22,7 @@ class TokenData(BaseModel):
 
 class UserBase(BaseModel):
     username: str
-    phone_number: str | None = None
+    phone: str | None = None
 
 class UserCreate(BaseModel):
     username: str
@@ -31,16 +31,16 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     username: str | None = None
-    phone_number: str | None = None
+    phone: str | None = None
     zip: int | None = None
    
 class AuthForm(BaseModel):
     username: Optional[str] = None
-    phone_number: Optional[str] = None
+    phone: Optional[str] = None
     code: Optional[str] = None
 
 class RegAuth(BaseModel):
-    phone_number: str
+    phone: str
     code: str
 
 class Venmo(BaseModel):
@@ -51,7 +51,7 @@ class Venmo(BaseModel):
 
 class RegisterForm(BaseModel):
     username: str
-    phone_number: str
+    phone: str
     register_token: str
 
 class NewUser(BaseModel):

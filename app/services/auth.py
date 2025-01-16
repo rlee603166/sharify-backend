@@ -71,7 +71,7 @@ class AuthService:
             user = await self.repository.get_by_username(username)
             if not user:
                 return None
-            if user['phone_number'] and phone_number != user['phone_number']:
+            if user['phone'] and phone_number != user['phone']:
                 return None
             return UserBase(**user)
         
