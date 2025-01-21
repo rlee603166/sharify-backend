@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Json
 from fastapi import UploadFile
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 
 
 class ReceiptForm(BaseModel):
@@ -20,3 +20,31 @@ class ReceiptUpdate(BaseModel):
     processed_data: Dict[str, Any] | None = None
     extracted_text: str | None = None
 
+
+class Item(BaseModel):
+    name: str
+    price: float
+    totalPrice: float
+
+
+class PersonSplit(BaseModel):
+    name: str
+    id: Optional[str]
+    items: List[Item]
+    subtotal: float
+    finalTotal: float
+    tip: float = 0
+    tax: float = 0
+    misc: float = 0
+
+
+class Summary(BaseModel):
+    tip: float
+    tax: float
+    misc: float
+    total: float
+
+
+class ProcessedReceipt(BaseModel):
+    summary: Summary
+    splits: List[PersonSplit]

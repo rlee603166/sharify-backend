@@ -4,7 +4,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, UploadFile, Form, BackgroundTasks
 from dependencies import ReceiptProcessorDep, ReceiptRepositoryDep 
 from pydantic import BaseModel
-from schemas import ReceiptForm
+from schemas import ReceiptForm, ProcessedReceipt
 from typing import Annotated
 
 
@@ -46,3 +46,24 @@ async def get_receipt(receipt_id: int, repo: ReceiptRepositoryDep):
     return await repo.get(receipt_id)
     
 
+
+@router.post("/venmo")
+async def process_venmo(receipt: ProcessedReceipt):
+    print("\n=== Received Venmo Processing Request ===")
+    print(f"\nSummary:")
+    print(f"Total: ${receipt.summary.total:.2f}")
+    print(f"Tip: ${receipt.summary.tip:.2f}")
+    print(f"Tax: ${receipt.summary.tax:.2f}")
+    print(f"Misc: ${receipt.summary.misc:.2f}")
+    
+    print("\nSplits:")
+    for person in receipt.splits:
+        print(f"\n{person.name}:")
+        print(f"ID: {person.id}")
+        for item in person.items:
+            print(f"  - {item.name}: ${item.totalPrice:.2f}")
+        print(f"Subtotal: ${person.subtotal:.2f}")
+        print(f"Final Total: ${person.finalTotal:.2f}")
+        print(f"Charges: Tip=${person.tip:.2f}, Tax=${person.tax:.2f}, Misc=${person.misc:.2f}")
+
+    return {"status": "success", "message": "Venmo requests queued"}
