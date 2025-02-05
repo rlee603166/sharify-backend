@@ -29,7 +29,7 @@ class Item(BaseModel):
 
 class PersonSplit(BaseModel):
     name: str
-    id: Optional[str]
+    id: Optional[str | int]
     items: List[Item]
     subtotal: float
     finalTotal: float
@@ -46,5 +46,6 @@ class Summary(BaseModel):
 
 
 class ProcessedReceipt(BaseModel):
+    receipt_id: int
     summary: Summary
     splits: List[PersonSplit]

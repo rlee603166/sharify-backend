@@ -2,10 +2,11 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 from schemas import Split, SplitCreate, SplitUpdate
+from database import supabase
 from .base import BaseRepository
 
 
-class SplitRepository(BaseRepository[Split, SplitCreate, SplitUpdate]):
+class SplitRepository(BaseRepository[dict, SplitCreate, SplitUpdate]):
     def __init__(self):
         super().__init__(supabase, "splits", pk="split_id")
     

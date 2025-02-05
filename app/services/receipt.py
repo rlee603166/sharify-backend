@@ -23,7 +23,7 @@ class ReceiptProcessor:
             os.path.dirname(
                 os.path.dirname(os.path.dirname(__file__))
             ), 
-            "storage/receipts"
+            "storage/receipts/"
         )
 
 
@@ -32,7 +32,7 @@ class ReceiptProcessor:
         unique_id = str(uuid.uuid4())
         extension = "png"
 
-        return f"/{user_id}_{timestamp}_{unique_id}.{extension}"
+        return f"{user_id}_{timestamp}_{unique_id}.{extension}"
 
 
     async def standardize(self, image_data):
@@ -224,10 +224,7 @@ class ReceiptProcessor:
             return {"error": f"Processing failed: {str(e)}"}
 
     async def save_and_process(self, png, filepath):
-        print(filepath)
-        print(self.pwd)
         path = self.pwd + filepath
-        print(path)
         await self.save_image(png, path)
 
         (processed_data, extracted_text), receipt = await asyncio.gather(

@@ -6,7 +6,24 @@ from database import supabase
 class UserRepository(BaseRepository[dict, UserCreate, UserUpdate]):
     def __init__(self):
         super().__init__(supabase, "users", pk="user_id")
-        
+
+    async def get_by_query(self, query: str):
+        try:
+            search_pattern = f"%{query}%"
+            response = (
+                self.db.table(self.table_name)
+                .select("*")
+                .or_(f"name.ilike.{search_pattern},username.ilike.{search_pattern}")
+                .limit(20)
+                .execute()
+            )
+            if not response.data:
+                return None
+            return response.data
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
     async def get_by_email(self, email: str):
         try:
             response = (

@@ -1,15 +1,9 @@
-import json
-import re
-import asyncio
 from fastapi import APIRouter, HTTPException, UploadFile, Form, BackgroundTasks
-from dependencies import ReceiptProcessorDep, ReceiptRepositoryDep 
-from pydantic import BaseModel
-from schemas import ReceiptForm, ProcessedReceipt
+from dependencies import ReceiptProcessorDep, ReceiptRepositoryDep, SplitServiceDep, SplitRepositoryDep
+from pydantic import ValidationError
+from schemas import ProcessedReceipt
 from typing import Annotated
 
-
-class Prompt(BaseModel):
-    prompt: str
 
 router = APIRouter(
     prefix="/receipts",
@@ -24,7 +18,6 @@ async def create_receipt(
     service: ReceiptProcessorDep,
     background_tasks: BackgroundTasks
 ):
-    print(user_id)
     png = await service.standardize(image)
 
     filepath = service.create_filepath(user_id)
@@ -42,28 +35,32 @@ async def create_receipt(
 
 @router.get("/{receipt_id}")
 async def get_receipt(receipt_id: int, repo: ReceiptRepositoryDep):
-    print(receipt_id)
     return await repo.get(receipt_id)
     
 
-
 @router.post("/venmo")
-async def process_venmo(receipt: ProcessedReceipt):
-    print("\n=== Received Venmo Processing Request ===")
-    print(f"\nSummary:")
-    print(f"Total: ${receipt.summary.total:.2f}")
-    print(f"Tip: ${receipt.summary.tip:.2f}")
-    print(f"Tax: ${receipt.summary.tax:.2f}")
-    print(f"Misc: ${receipt.summary.misc:.2f}")
-    
-    print("\nSplits:")
-    for person in receipt.splits:
-        print(f"\n{person.name}:")
-        print(f"ID: {person.id}")
-        for item in person.items:
-            print(f"  - {item.name}: ${item.totalPrice:.2f}")
-        print(f"Subtotal: ${person.subtotal:.2f}")
-        print(f"Final Total: ${person.finalTotal:.2f}")
-        print(f"Charges: Tip=${person.tip:.2f}, Tax=${person.tax:.2f}, Misc=${person.misc:.2f}")
-
-    return {"status": "success", "message": "Venmo requests queued"}
+async def process_venmo(receipt: ProcessedReceipt, service: SplitServiceDep):
+    try:
+        print("\n=== Received Venmo Processing Request ===")
+        print(f"\nReceipt ID: {receipt.receipt_id}")
+        
+        first_split = receipt.splits[0]
+        print("\nFirst split data:")
+        print(f"Items: {first_split.items}")
+        print(f"Subtotal: {first_split.subtotal}")
+        print(f"Tax: {first_split.tax}")
+        print(f"Tip: {first_split.tip}")
+        print(f"Misc: {first_split.misc}")
+        print(f"Final Total: {first_split.finalTotal}")
+        
+        result = await service.upload(receipt.receipt_id, first_split)
+        return { 
+            "split": result,
+            "status": "success"
+        }
+    except ValidationError as e:
+        print(f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

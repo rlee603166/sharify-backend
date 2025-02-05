@@ -1,12 +1,17 @@
 from pydantic import BaseModel
+from typing import List
+
+
+class GroupMember(BaseModel):
+    user_id: int
 
 class CreateGroup(BaseModel):
-    group_id: int 
     group_name: str
-    group_photo: str
+    imageUri: str | None = None
 
+class NewGroup(CreateGroup):
+    members: List[GroupMember]
 
 class UpdateGroup(BaseModel):
-    group_id: int | None = None
     group_name: str | None = None
-    group_photo: str | None = None
+    imageUri: str | None = None

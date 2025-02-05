@@ -5,7 +5,7 @@ from supabase import create_client, Client as SupabaseClient
 from functools import lru_cache
 from fastapi import Depends, Request
 from repositories import UserRepository, ReceiptRepository, FriendRepository, GroupRepository, UGRepository, SplitRepository
-from services import AuthService, UserService, TwilioService, MockTwilioService, ReceiptProcessor, MockAuthService
+from services import AuthService, UserService, TwilioService, MockTwilioService, ReceiptProcessor, MockAuthService, SplitService, GroupService
 from config import Settings, get_settings
 
 settings = get_settings()
@@ -60,6 +60,13 @@ def get_receipt_processor(
 ) -> ReceiptProcessor:
     return ReceiptProcessor(repository=repo)
 
+@lru_cache()
+def get_split_service(repo: Annotated[SplitRepository, Depends(get_split_repository)]):
+    return SplitService(split_repo=repo)
+
+@lru_cache()
+def get_group_service(repo: Annotated[GroupRepository, Depends(get_group_repository)]):
+    return GroupService(repo=repo)
 
 ReceiptProcessorDep = Annotated[ReceiptProcessor, Depends(get_receipt_processor)]
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
@@ -71,6 +78,8 @@ SplitRepositoryDep = Annotated[SplitRepository, Depends(get_split_repository)]
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+SplitServiceDep = Annotated[SplitService, Depends(get_split_service)]
+GroupServiceDep = Annotated[GroupService, Depends(get_group_service)]
 
 """
 Third Part Clients

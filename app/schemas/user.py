@@ -30,9 +30,11 @@ class UserCreate(BaseModel):
     imageUri: str | None = None
 
 class UserUpdate(BaseModel):
+    user_id: int | None = None
+    name: str | None = None
     username: str | None = None
+    imageUri: str | None = None
     phone: str | None = None
-    zip: int | None = None
    
 class AuthForm(BaseModel):
     username: Optional[str] = None
@@ -76,3 +78,12 @@ class UserInDB(BaseModel):
     phone: str | None = None
     created_at: str | None = None
     imageUri: str | None = None
+    friend_id: int | None = None
+
+class FriendShip(BaseModel):
+    user_1: int
+    user_2: int
+
+class GetFriends(BaseModel):
+    user_1: int
+    friend_id: int

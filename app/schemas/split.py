@@ -1,18 +1,12 @@
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
-
-class Item(BaseModel):
-    name: str
-    price: float
-    totalPrice: float
 
 
 class SplitBase(BaseModel):
     receipt_id: int
     user_id: int
     subtotal: float
-    items: List[Item]
+    items: List[dict]
     tax: float
     tip: float
     misc: float
@@ -25,7 +19,7 @@ class SplitCreate(SplitBase):
 
 class SplitUpdate(BaseModel):
     subtotal: Optional[float] = None
-    items: Optional[List[Item]] = None
+    items: Optional[List[dict]] = None
     tax: Optional[float] = None
     tip: Optional[float] = None
     misc: Optional[float] = None
