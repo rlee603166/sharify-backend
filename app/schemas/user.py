@@ -25,6 +25,7 @@ class UserBase(BaseModel):
     phone: str | None = None
 
 class UserCreate(BaseModel):
+    name: str
     username: str
     phone: str
     imageUri: str | None = None
@@ -52,9 +53,10 @@ class Venmo(BaseModel):
     handle: str
 
 class RegisterForm(BaseModel):
+    name: str
     username: str
     phone: str
-    register_token: str
+    imageUri: str | None = None
 
 class NewUser(BaseModel):
     user_id: int

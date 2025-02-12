@@ -21,22 +21,6 @@ async def token(
     auth_service: AuthServiceDep,
     twilio_service: TwilioServiceDep
 ) -> Token:
-    demo = False
-    if demo:
-        if auth_form.username == "sush":
-            if auth_form.code == "012345":
-                return Token(
-                    status='success',
-                    access_token='',
-                    refresh_token='',
-                    token_type='bearer'
-                )
-
-            return ErrorResponse(
-                status="failed",
-                message="invalid crendentials"
-            )
-
     user = await auth_service.verify_user_credentials(
         auth_form.username,
         auth_form.phone

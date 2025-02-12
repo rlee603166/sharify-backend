@@ -4,6 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from config import get_settings
 from api import api_router
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+import threading
+
+from selenium_manager import initialize_driver, get_driver_lock
+
 
 settings = get_settings()
 
@@ -33,3 +40,13 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.on_event("startup")
+def startup():
+    initialize_driver()  # Initialize the driver when the app starts
+
+@app.on_event("shutdown")
+def shutdown():
+    driver = initialize_driver()
+    if driver:
+        driver.quit()

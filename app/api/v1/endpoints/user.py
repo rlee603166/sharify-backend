@@ -1,20 +1,36 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, Depends
+from fastapi.security import OAuth2PasswordBearer
+from typing import Annotated
 from dependencies import FriendRepositoryDep
 from schemas import UserCreate, RegisterToken, AuthForm, RegisterForm, FriendShip, UserUpdate
 from dependencies import AuthServiceDep, UserServiceDep, TwilioServiceDep, UserRepositoryDep 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from db_utils import add_friendship, check_friendship, get_friendship
+from pydantic import BaseModel
+from selenium_manager import initialize_driver, get_driver_lock
+from datetime import timedelta
+from config import get_settings
 
+
+settings = get_settings()
 
 router = APIRouter(
     prefix="/users",
     tags=["users"]
 )
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+@router.get("/me")
+async def get_me(token: Annotated[str, Depends(oauth2_scheme)], auth_service: AuthServiceDep):
+    verified = await auth_service.verify_token(token)
+    return verified
 
 @router.post("/friend")
 async def add_friends(data: FriendShip):
@@ -51,10 +67,10 @@ async def upload_pfp(
 ):
     png = await service.standardize(image)
     filepath = service.create_pfp_filepath()
-    user_update = UserUpdate(user_id=user_id, imageUri=filepath)
+    user_update = UserUpdate(imageUri=filepath)
 
     background_tasks.add_task(service.save_image, png, filepath)
-    background_tasks.add_task(repo.update, user_update)
+    background_tasks.add_task(repo.update, user_id, user_update)
 
     return { 'filepath': filepath }
 
@@ -70,97 +86,125 @@ async def sms(
     auth_service: AuthServiceDep,
     twilio_service: TwilioServiceDep
 ):
-    verification_status = await twilio_service.verify_sms(auth_form.phone_number, auth_form.code)
+    verification_status = await twilio_service.verify_sms(auth_form.phone, auth_form.code)
     if verification_status == 'approved':
-        register_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        register_token = auth_service.create_access_token(
-            data={
-                'phone_number': form.phone_number,
-                'status': 'verified',
-                'temp_token': True
-            },
-            expires_delta=register_token_expires
-        )
-
-        return RegisterToken(
-            status='success',
-            register_token=register_token,
-            token_type='bearer'
-        )
+        return { "status": "approved" }
+    return { "status": "denied" }
+        # register_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        # register_token = auth_service.create_access_token(
+        #     data={
+        #         'phone_number': form.phone_number,
+        #         'status': 'verified',
+        #         'temp_token': True
+        #     },
+        #     expires_delta=register_token_expires
+        # )
+        #
+        # return RegisterToken(
+        #     status='success',
+        #     register_token=register_token,
+        #     token_type='bearer'
+        # )
  
+class SMS(BaseModel):
+    phone: str
+
+@router.post("/sms")
+async def sendSMS(
+    form: SMS, 
+    user_service: UserServiceDep,
+    twilio_service: TwilioServiceDep
+):
+    phone = form.phone
+    existing = await user_service.get_by_phone(phone)
+    if existing:
+        return { "status": "user already exists" }
+    return { "status": await twilio_service.send_sms(form.phone) }
+
 
 @router.post("/register")
 async def register(
     register_form: RegisterForm, 
-    user_create: UserCreate,
-    auth_service: AuthServiceDep
+    auth_service: AuthServiceDep,
+    user_service: UserServiceDep
 ): 
+    name = register_form.name
     username = register_form.username
-    phone_number = register_form.phone_number
-    register_token = register_form.register_token
+    phone = register_form.phone
 
-    verified = auth_service.verify_register_token(register_token, phone_number)
-    if not verified:
-        return {
-            "status": "error"
-        }
     user_create = UserCreate(
+        name=name,
         username=username,  
-        phone=phone_number
+        phone=phone,
+        imageUri=register_form.imageUri if register_form.imageUri else None
     )
-    created_user = await auth_service.create_user(user_create)
+    created_user = await user_service.create_user(user_create)
+    print(created_user)
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth_service.create_access_token(
+        data={'sub': username},
+        expires_delta=access_token_expires
+    )
+        
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = auth_service.create_refresh_token(
+        data={'sub': username},
+        expires_delta=refresh_token_expires
+    )
 
+    return {
+        "user": created_user,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": 'bearer'
+    }
+ 
 
-
-@router.get('/venmo/{username}')
+@router.get("/venmo/{username}")
 async def get_venmo(username: str):
-    chrome_options = Options()
-    chrome_options.add_argument('--headless')
-    driver = webdriver.Chrome(options=chrome_options)
-    
-    try:
-        driver.get(f"https://account.venmo.com/u/{username}")
-        
-        avatar_element = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((
-                By.CSS_SELECTOR, 
-                ".MuiAvatar-root"
-            ))
-        )
-        
-        username_element = driver.find_element(By.CLASS_NAME, "profileInfo_username__G9vVA")
-        handle_element = driver.find_element(By.CLASS_NAME, "profileInfo_handle__adidN")
-        
-        handle = handle_element.text.replace('@', '')
-        
-        initials = None
-        profile_image = None
-        
-        try:
-            img_element = avatar_element.find_element(By.CLASS_NAME, "MuiAvatar-img")
-            profile_image = img_element.get_attribute("src")
-        except NoSuchElementException:
-            initials = avatar_element.text
-            
-        return {
-            "name": username_element.text,
-            "handle": handle,
-            "profile_image": profile_image,
-            "initials": initials
-        }
-            
-    except TimeoutException:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found or page took too long to load"
-        )
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error fetching profile: {str(e)}"
-        )
-        
-    finally:
-        driver.quit()
+    driver = initialize_driver()
+    driver_lock = get_driver_lock()
 
+    with driver_lock:  # Ensure thread-safe access to the browser
+        try:
+            driver.get(f"https://account.venmo.com/u/{username}")
+
+            avatar_element = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((
+                    By.CSS_SELECTOR, 
+                    ".MuiAvatar-root"
+                ))
+            )
+
+            username_element = driver.find_element(By.CLASS_NAME, "profileInfo_username__G9vVA")
+            handle_element = driver.find_element(By.CLASS_NAME, "profileInfo_handle__adidN")
+
+            handle = handle_element.text.replace('@', '')
+
+            initials = None
+            profile_image = None
+
+            try:
+                img_element = avatar_element.find_element(By.CLASS_NAME, "MuiAvatar-img")
+                profile_image = img_element.get_attribute("src")
+            except NoSuchElementException:
+                initials = avatar_element.text
+
+            return {
+                "name": username_element.text,
+                "handle": handle,
+                "profile_image": profile_image,
+                "initials": initials
+            }
+
+        except TimeoutException:
+            raise HTTPException(
+                status_code=404,
+                detail="Profile not found or page took too long to load"
+            )
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching profile: {str(e)}"
+            )

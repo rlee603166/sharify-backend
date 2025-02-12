@@ -63,7 +63,7 @@ class UserRepository(BaseRepository[dict, UserCreate, UserUpdate]):
             response = (
                 self.db.table(self.table_name)
                     .select("*")
-                    .eq("phone_number", phone)
+                    .eq("phone", phone)
                     .execute()
             )
 
