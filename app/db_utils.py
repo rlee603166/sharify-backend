@@ -1,5 +1,5 @@
 from database import supabase
-from schemas import CreateUG, FriendShip
+from schemas import CreateUG, CreateFriendShip
 from dependencies import UGRepositoryDep
 import asyncio
 
@@ -30,7 +30,7 @@ async def add_users_to_groups(
     return await repo.create(CreateUG(user_id=user_id, group_id=group_id))
 
 
-async def add_friendship(data: FriendShip):
+async def add_friendship(data: CreateFriendShip):
     return await asyncio.to_thread(
         lambda: supabase.table("friends")\
             .insert(data.model_dump())\
@@ -57,3 +57,10 @@ async def get_friendship(user_1: int, user_2: int):
     )
     return result.data[0]
 
+async def get_friend_requests(user_id: int):
+    result = await asyncio.to_thread(
+        lambda: supabase.rpc('get_friend_requests', {
+            'id': user_id
+        }).execute()
+    )
+    return result.data

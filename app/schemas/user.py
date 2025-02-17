@@ -81,11 +81,19 @@ class UserInDB(BaseModel):
     created_at: str | None = None
     imageUri: str | None = None
     friend_id: int | None = None
+    status: str | None = None
+
+class CreateFriendShip(BaseModel):
+    user_1: int
+    user_2: int
+    status: str
 
 class FriendShip(BaseModel):
     user_1: int
     user_2: int
+ 
 
 class GetFriends(BaseModel):
     user_1: int
     friend_id: int
+    status: str

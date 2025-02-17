@@ -2,16 +2,13 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, Depen
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 from dependencies import FriendRepositoryDep
-from schemas import UserCreate, RegisterToken, AuthForm, RegisterForm, FriendShip, UserUpdate
+from schemas import UserCreate, CreateFriendShip, AuthForm, RegisterForm, FriendShip, UserUpdate, UpdateFriend
 from dependencies import AuthServiceDep, UserServiceDep, TwilioServiceDep, UserRepositoryDep 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from db_utils import add_friendship, check_friendship, get_friendship
+from db_utils import add_friendship, check_friendship, get_friend_requests, get_friendship
 from pydantic import BaseModel
 from selenium_manager import initialize_driver, get_driver_lock
 from datetime import timedelta
@@ -32,13 +29,29 @@ async def get_me(token: Annotated[str, Depends(oauth2_scheme)], auth_service: Au
     verified = await auth_service.verify_token(token)
     return verified
 
+
 @router.post("/friend")
 async def add_friends(data: FriendShip):
     existing = await check_friendship(data.user_1, data.user_2)
     if existing.data:
         return {"message": "Friendship already exists"}
     
-    return await add_friendship(data)
+    return await add_friendship(
+        CreateFriendShip(
+            user_1=data.user_1, 
+            user_2=data.user_2, 
+            status="pending"
+        )
+    )
+
+@router.patch("/friend")
+async def accept(
+    data: UpdateFriend,
+    repo: FriendRepositoryDep
+):
+    friendship = await get_friendship(data.user_1, data.user_2)
+    return await repo.update(friendship["friend_id"], data)
+
 
 @router.delete("/friend")
 async def delete_friends(
@@ -48,6 +61,29 @@ async def delete_friends(
     friendship = await get_friendship(data.user_1, data.user_2)
     return await repo.delete(friendship["friend_id"])
 
+
+@router.get("/friend-requests/{user_id}")
+async def get_requests(user_id: int):
+    try:
+        requests = await get_friend_requests(user_id)
+
+        result = [
+            {
+                "user_id": request["user_id"],
+                "username": request["username"],
+                "name": request["name"],
+                "phone": request["phone"],
+                "imageUri": request["imageuri"],  # Ensure consistent key naming
+                "friend_id": request["friend_id"]
+            }
+            for request in requests
+        ]
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/friends/{user_id}")
 async def get_friends(user_id: int, service: UserServiceDep):
     return await service.get_friends(user_id) 
@@ -56,6 +92,7 @@ async def get_friends(user_id: int, service: UserServiceDep):
 @router.get("/search/{query}")
 async def get_query(query: str, repo: UserRepositoryDep):
     return await repo.get_by_query(query)
+
 
 @router.post("/pfp/{user_id}")
 async def upload_pfp(

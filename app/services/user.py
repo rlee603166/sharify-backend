@@ -93,16 +93,19 @@ class UserService:
 
     async def get_friends(self, user_id: int):
         friends = await self.friend_repo.get_by_user(user_id)
+        print(friends)
 
         if friends is None:
             return "no friends"
 
-        friend_ids =  [
-            GetFriends(user_1=friend["user_1"], friend_id=friend["friend_id"]) 
-            if friend["user_1"] != user_id else GetFriends(user_1=friend["user_2"], friend_id=friend["friend_id"])
-            for friend in friends
-        ]
-        
+        friend_ids = []
+
+        for friend in friends:
+            if friend["status"] == "accepted":
+                friend_ids.append(
+                    GetFriends(user_1=friend["user_1"], friend_id=friend["friend_id"], status=friend["status"]) 
+                    if friend["user_1"] != user_id else GetFriends(user_1=friend["user_2"], friend_id=friend["friend_id"], status=friend["status"])
+                )
 
         tasks = [self.repository.get(friend.user_1) for friend in friend_ids]
 
@@ -118,7 +121,8 @@ class UserService:
                 phone=friend["phone"],
                 created_at=friend["created_at"],
                 imageUri=friend["imageUri"],
-                friend_id=friend_ids[i].friend_id
+                friend_id=friend_ids[i].friend_id,
+                status=friend_ids[i].status
             ))
 
         return result
