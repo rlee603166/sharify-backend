@@ -35,8 +35,9 @@ async def create_receipt(
 
 @router.get("/{receipt_id}")
 async def get_receipt(receipt_id: int, repo: ReceiptRepositoryDep):
-    return await repo.get(receipt_id)
-    
+    receipt = await repo.get(receipt_id)
+    print(receipt) 
+    return receipt
 
 @router.post("/venmo")
 async def process_venmo(receipt: ProcessedReceipt, service: SplitServiceDep):

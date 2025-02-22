@@ -1,5 +1,6 @@
 import re
 import os
+import base64
 import json
 import asyncio
 import uuid
@@ -166,55 +167,70 @@ class ReceiptProcessor:
     
         return cleaned_text
 
+    def encode_image(self, image_path):
+        with Image.open(image_path) as img:
+            img = img.resize((1024, 1024))  # Resize to 512x512
+
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            base64_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        return base64_str
+
 
     async def process(self, image_path):
         try:
-            extracted_text = self.ocr(image_path)
+            base64_img = self.encode_image(image_path)
 
+            print("fetching chat")
             completion = self.client.chat.completions.create(
-                model="gpt-4o-mini-2024-07-18",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an assistant that formats receipt data into a structured format for a food-sharing app."
-                    },
-                    {
-                        "role": "user",
-                        "content": f"""
-                        The following is text extracted from a receipt. Extract the items and prices and return them as JSON with this exact structure:
-                        {{
-                            "items": [
-                                {{
-                                    "id": "<unique_id>",
-                                    "name": "<item_name>",
-                                    "price": <price>,
-                                    "people": []
-                                }}
-                            ],
-                            "additional": [
-                                {{
-                                    "tax": <tax>,
-                                    "tip": <tip>,
-                                    "credit_charge": <credit_charge>
-                                }}
-                            ]
-                        }}
-                        Use an incrementing numeric ID for each item, starting from 1. Ensure the names and prices are accurate.
+                    model="gpt-4o-mini",
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": "You are an assistant that extracts and formats receipt data into structured JSON for a food-sharing app."
+                            },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": '''
+                                 Extract the items and prices from the following receipt image and return them as JSON with this exact structure:
+                                 {
+                                     "items": [
+                                         {
+                                             "id": "<unique_id>",
+                                             "name": "<item_name>",
+                                             "price": <price>,
+                                             "people": []
+                                             }
+                                         ],
+                                     "additional": {
+                                         "tax": <tax>,
+                                         "tip": <tip>,
+                                         "credit_charge": <credit_charge>
+                                         }
+                                     }
+                                 Use an incrementing numeric ID for each item, starting from 1. Ensure the names and prices are accurate.
+                                 '''},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,{base64_img}", "detail": "high"},
+                                    },           
+                                ]
+                            }
+                        ],
+                        max_tokens=1000,
+                    )            
 
-                        Receipt text:
-                        {extracted_text}
-                        """
-                    }
-                ],
-                max_tokens=500,
-                response_format={ "type": "json_object" }
-            )
+            stuff = completion.choices[0].message.content
 
-            raw_response = completion.choices[0].message.content
+            if stuff.startswith("```json"):
+                stuff = stuff.strip("```json").strip("```")
 
-            response = json.loads(raw_response)
+            receipt_data = json.loads(stuff)
+            print(receipt_data)
 
-            return response, extracted_text
+            return receipt_data 
 
         except FileNotFoundError:
             return {"error": f"Image file not found: {image_path}"}
@@ -227,16 +243,13 @@ class ReceiptProcessor:
         path = self.pwd + filepath
         await self.save_image(png, path)
 
-        (processed_data, extracted_text), receipt = await asyncio.gather(
+        processed_data, receipt = await asyncio.gather(
             self.process(path),
             self.repository.get_by_path(filepath)
         )
 
-        print(receipt)
-
         update_data = ReceiptUpdate(
             processed_data=processed_data,
-            extracted_text=extracted_text,
             status="completed"
         )
 

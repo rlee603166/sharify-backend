@@ -18,7 +18,6 @@ class ReceiptUpdate(BaseModel):
     filepath: str | None = None
     status: str | None = None
     processed_data: Dict[str, Any] | None = None
-    extracted_text: str | None = None
 
 
 class Item(BaseModel):
