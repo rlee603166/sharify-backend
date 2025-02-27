@@ -45,6 +45,7 @@ async def token(
         auth_form.username,
         auth_form.phone
     )
+    print(user)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -97,13 +98,14 @@ async def validate_access(
 @router.post("/refresh")
 async def refresh(
     auth_service: AuthServiceDep,
-    user_info: AuthForm,
+    username: str,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
     token = credentials.credentials
+    print(token)
     user = await auth_service.verify_refresh_token(token)
-    
-    if not user:
+    print(username)
+    if not user or user["username"] != username:
         return ErrorResponse(
             status="failed",
             message="user does not exist"
@@ -111,13 +113,13 @@ async def refresh(
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth_service.create_access_token(
-        data={'sub': user_info.username},
+        data={'sub': username},
         expires_delta=access_token_expires
     )
     
     refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    refresh_token = auth_service.create_access_token(
-        data={'sub': user.username},
+    refresh_token = auth_service.create_refresh_token(
+        data={'sub': username},
         expires_delta=refresh_token_expires
     )
 

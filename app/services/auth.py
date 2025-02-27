@@ -107,11 +107,14 @@ class AuthService:
     async def verify_refresh_token(self, token: str) -> Optional[UserInDB]:
         try:
             payload = jwt.decode(token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
+            print("Token Payload:", payload)
             username: str = payload.get("sub")
             if username is None:
                 return None
             token_data = TokenData(username=username)
-            return await self.repository.get_by_username(token_data.username)
+            user = await self.repository.get_by_username(token_data.username)
+            print(f"User lookup for {token_data.username}: {user}")
+            return user
         except jwt.InvalidTokenError:
             return None
         
