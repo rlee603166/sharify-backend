@@ -90,6 +90,7 @@ async def validate_access(
     user = await auth_service.verify_token(token)
     
     if user:
+        print(user)
         return { 'status': 'success' }
     else:
         return { 'status': 'failed' }

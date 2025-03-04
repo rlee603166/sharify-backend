@@ -1,14 +1,13 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, Depends
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
-from dependencies import FriendRepositoryDep
 from schemas import UserCreate, CreateFriendShip, AuthForm, RegisterForm, FriendShip, UserUpdate, UpdateFriend
-from dependencies import AuthServiceDep, UserServiceDep, TwilioServiceDep, UserRepositoryDep 
+from dependencies import AuthServiceDep, UserServiceDep, TwilioServiceDep, UserRepositoryDep, FriendRepositoryDep
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from db_utils import add_friendship, check_friendship, get_friend_requests, get_friendship
+from db_utils import add_friendship, check_friendship, get_friend_requests, get_friendship, delete_user_account
 from pydantic import BaseModel
 from selenium_manager import initialize_driver, get_driver_lock
 from datetime import timedelta
@@ -28,6 +27,17 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 async def get_me(token: Annotated[str, Depends(oauth2_scheme)], auth_service: AuthServiceDep):
     verified = await auth_service.verify_token(token)
     return verified
+
+@router.delete("/me")
+async def delete(
+    token: Annotated[str, Depends(oauth2_scheme)], 
+    auth_service: AuthServiceDep,
+    repo: UserRepositoryDep
+):
+    verified = await auth_service.verify_token(token)
+    if verified:
+        return await delete_user_account(verified["user_id"])
+        
 
 
 @router.post("/friend")

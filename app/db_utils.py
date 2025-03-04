@@ -3,6 +3,13 @@ from schemas import CreateUG, CreateFriendShip
 from dependencies import UGRepositoryDep
 import asyncio
 
+async def delete_user_account(user_id: int):
+    return await asyncio.to_thread(
+        lambda: supabase.rpc("delete_user_cascade", {
+                "p_user_id": user_id
+            })\
+            .execute()
+    )
 
 async def get_user_groups(user_id: int):
     return await asyncio.to_thread( 

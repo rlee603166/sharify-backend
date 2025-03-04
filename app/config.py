@@ -21,6 +21,7 @@ class Settings(BaseSettings):
         "http://0.0.0.0"
     ]
     
+    PSQL_URL: str
     DATABASE_URL: str
     SUPABASE_KEY: str
     TWILIO_ASID: str
